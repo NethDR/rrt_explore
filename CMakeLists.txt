@@ -60,7 +60,7 @@ target_link_libraries(rrt_explore ${catkin_LIBRARIES})
 #############
 
 # install nodes
-install(TARGETS explore
+install(TARGETS rrt_explore
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
