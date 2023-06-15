@@ -11,5 +11,9 @@
   <param name="gain_scale" value="3.0"/>
   <param name="transform_tolerance" value="0.5"/>
   <param name="min_frontier_size" value="0.75"/>
+
+  <param name="early_stop_enable" value="true"/>
+  <param name="steer_distance" value="5"/>
+  <param name="rrtMaxIter" value="500000"/>
 </node>
 </launch>

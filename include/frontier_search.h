@@ -40,7 +40,8 @@ namespace frontier_exploration
 		 * @param costmap Reference to costmap data to search.
 		 */
 		FrontierSearch(costmap_2d::Costmap2D* costmap, double potential_scale,
-			double gain_scale, double min_frontier_size);
+			double gain_scale, double min_frontier_size,
+			bool early_stop_enable, float steer_distance, int rrtMaxIter);
 
 		/**
 		 * @brief Runs search implementation, outward from the start position
@@ -90,14 +91,23 @@ namespace frontier_exploration
 		double min_frontier_size_;
 
 
-		bool early_stop_enable = true;
-		float steer_distance = 1;
-		int rrtMaxIter = 1e5;
+		bool early_stop_enable;
+		float steer_distance;
+		int rrt_max_iter;
 
 
 		node getRandomPoint();
 		node getClosestNode(node n, std::unordered_map<node,node>& parents);
 		node steer(node rand, node closest);
+
+		enum path_status {
+			CLEAR,
+			FRONTIER,
+			BLOCKED
+		};
+
+		path_status getStatus(node from, node to, node& frontier);
+
 		bool isClear(node from, node to);
 		node containsFrontier(node from, node to);
 		inline void addToTree(node n, node parent, std::unordered_map<node,node>& parents) {parents[n] = parent;}

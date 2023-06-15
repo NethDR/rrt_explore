@@ -60,6 +60,9 @@ Explore::Explore()
 {
   double timeout;
   double min_frontier_size;
+  bool early_stop_enable;
+  float steer_distance;
+  int rrt_max_iter;
   private_nh_.param("planner_frequency", planner_frequency_, 1.0);
   private_nh_.param("progress_timeout", timeout, 30.0);
   progress_timeout_ = ros::Duration(timeout);
@@ -68,10 +71,13 @@ Explore::Explore()
   private_nh_.param("orientation_scale", orientation_scale_, 0.0);
   private_nh_.param("gain_scale", gain_scale_, 1.0);
   private_nh_.param("min_frontier_size", min_frontier_size, 0.5);
+  private_nh_.param("early_stop_enable", early_stop_enable, true);
+  private_nh_.param("steer_distance", steer_distance, 10.0f);
+  private_nh_.param("rrt_max_iter", rrt_max_iter, 500000);
 
   search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
                                                  potential_scale_, gain_scale_,
-                                                 min_frontier_size);
+                                                 min_frontier_size, early_stop_enable, steer_distance, rrt_max_iter);
 
   if (visualize_) {
     marker_array_publisher_ =
@@ -287,16 +293,17 @@ void Explore::start()
 
 void Explore::stop()
 {
-  move_base_client_.cancelAllGoals();
-  exploring_timer_.stop();
-  ROS_INFO("Exploration stopped.");
+  return; // no permanent stop because of random nature of rrt
+  // move_base_client_.cancelAllGoals();
+  // exploring_timer_.stop();
+  // ROS_INFO("Exploration stopped.");
 }
 
 }  // namespace explore
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "explore");
+  ros::init(argc, argv, "rrt_explore");
   if (ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,
                                      ros::console::levels::Debug)) {
     ros::console::notifyLoggerLevelsChanged();

@@ -16,17 +16,20 @@ namespace frontier_exploration
 
 	FrontierSearch::FrontierSearch(costmap_2d::Costmap2D* costmap,
 		double potential_scale, double gain_scale,
-		double min_frontier_size)
+		double min_frontier_size,
+		bool early_stop_enable, float steer_distance, int rrt_max_iter)
 		: costmap_(costmap)
 		, potential_scale_(potential_scale)
 		, gain_scale_(gain_scale)
 		, min_frontier_size_(min_frontier_size)
+		, early_stop_enable(early_stop_enable)
+		, steer_distance(steer_distance)
+		, rrt_max_iter(rrt_max_iter)
 	{
 	}
 
 	std::vector<Frontier> FrontierSearch::searchFrom(geometry_msgs::Point position)
 	{
-		ROS_DEBUG("THANK FUCK");
 		std::vector<Frontier> frontier_list;
 
 		// Sanity check that robot is inside costmap bounds before searching
@@ -66,30 +69,27 @@ namespace frontier_exploration
 
 		bool found_goal = false;
 
-		ROS_DEBUG("HI");
-
-		for (int iter = 0; iter < rrtMaxIter; iter++) {
+		for (int iter = 0; iter < rrt_max_iter; iter++) {
 			auto rand_node = getRandomPoint();
 			auto nearest_node = getClosestNode(rand_node, parents);
 			auto new_node = steer(rand_node, nearest_node);
-			if (isClear(nearest_node, new_node)) {
-				ROS_DEBUG("CLEAR PATH :))");
-				node frontierNode = containsFrontier(nearest_node, new_node);
-				addToTree(new_node, nearest_node, parents);
-				if (frontierNode != NODE_NONE) {
-					if (isNewFrontierCell(new_node, frontier_flag)) {
-						frontier_flag[new_node] = true;
-						Frontier new_frontier = buildNewFrontier(new_node, pos, frontier_flag);
-						if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
-							frontier_list.push_back(new_frontier);
-						}
-						found_goal = true;
-						ROS_DEBUG("YAY :))");
-					}
+			node front;
+			auto status = getStatus(nearest_node, new_node, front);
+
+			if (status == BLOCKED)
+				continue;
+
+			addToTree(new_node, nearest_node, parents);
+
+			if (status == FRONTIER && isNewFrontierCell(front, frontier_flag)) {
+				frontier_flag[front] = true;
+				Frontier new_frontier = buildNewFrontier(front, pos, frontier_flag);
+				if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
+					frontier_list.push_back(new_frontier);
+					found_goal = true;
 				}
-			} else {
-				ROS_DEBUG("removed new_node");
 			}
+
 			if (early_stop_enable && found_goal)
 				break;
 		}
