@@ -74,16 +74,20 @@ Explore::Explore()
   private_nh_.param("early_stop_enable", early_stop_enable, true);
   private_nh_.param("steer_distance", steer_distance, 10.0f);
   private_nh_.param("rrt_max_iter", rrt_max_iter, 500000);
-
-  search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
-                                                 potential_scale_, gain_scale_,
-                                                 min_frontier_size, early_stop_enable, steer_distance, rrt_max_iter);
+  ros::Publisher rrt_node_publisher;
 
   if (visualize_) {
     marker_array_publisher_ =
         private_nh_.advertise<visualization_msgs::MarkerArray>("frontiers", 10);
+    rrt_node_publisher =
+        private_nh_.advertise<visualization_msgs::Marker>("rrtnodes", 10);
+    std::string s = costmap_client_.getGlobalFrameID();
+    ROS_DEBUG(s.c_str());
   }
 
+  search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
+                                                 potential_scale_, gain_scale_,
+                                                 min_frontier_size, early_stop_enable, steer_distance, rrt_max_iter, rrt_node_publisher);
   ROS_INFO("Waiting to connect to move_base server");
   move_base_client_.waitForServer();
   ROS_INFO("Connected to move_base server");

@@ -1,12 +1,10 @@
 #include <frontier_search.h>
-
 #include <mutex>
-
 #include <geometry_msgs/Point.h>
-
 #include <costmap_tools.h>
-
 #include <limits>
+#include <fstream>
+#include <visualization_msgs/Marker.h>
 
 namespace frontier_exploration
 {
@@ -17,7 +15,8 @@ namespace frontier_exploration
 	FrontierSearch::FrontierSearch(costmap_2d::Costmap2D* costmap,
 		double potential_scale, double gain_scale,
 		double min_frontier_size,
-		bool early_stop_enable, float steer_distance, int rrt_max_iter)
+		bool early_stop_enable, float steer_distance, int rrt_max_iter,
+		ros::Publisher debug_publisher)
 		: costmap_(costmap)
 		, potential_scale_(potential_scale)
 		, gain_scale_(gain_scale)
@@ -25,6 +24,7 @@ namespace frontier_exploration
 		, early_stop_enable(early_stop_enable)
 		, steer_distance(steer_distance)
 		, rrt_max_iter(rrt_max_iter)
+		, debug_publisher(debug_publisher)
 	{
 	}
 
@@ -46,6 +46,7 @@ namespace frontier_exploration
 		map_ = costmap_->getCharMap();
 		size_x_ = costmap_->getSizeInCellsX();
 		size_y_ = costmap_->getSizeInCellsY();
+
 
 		// initialize flag arrays to keep track of visited and frontier cells
 		std::vector<bool> frontier_flag(size_x_ * size_y_, false);
@@ -92,6 +93,61 @@ namespace frontier_exploration
 
 			if (early_stop_enable && found_goal)
 				break;
+
+			ROS_DEBUG_COND(iter % (rrt_max_iter / 1000) == 0, "iter %d", iter);
+
+			if (iter % (rrt_max_iter / 100) == 0) {
+				visualization_msgs::Marker m;
+				m.type = visualization_msgs::Marker::LINE_LIST;
+				m.color.r = 0;
+				m.color.b = 0;
+				m.color.g = 1;
+				m.scale.x = 1.0;
+				m.scale.y = 1.0;
+				m.scale.z = 1.0;
+				m.lifetime = ros::Duration(0);
+				m.header.frame_id = "map";
+				m.header.stamp = ros::Time::now();
+				m.ns = "frontiers";
+
+				for (auto p : parents) {
+					unsigned int xto, xfrom, yto, yfrom;
+					geometry_msgs::Point to, from;
+					costmap_->indexToCells(p.first, xto, yto);
+					costmap_->indexToCells(p.second, xfrom, yfrom);
+					costmap_->mapToWorld(xto, yto, to.x, to.y);
+					costmap_->mapToWorld(xfrom, yfrom, from.x, from.y);
+					m.points.emplace_back(from);
+					m.points.emplace_back(to);
+				}
+				debug_publisher.publish(m);
+			}
+
+		}
+
+		{
+			visualization_msgs::Marker m;
+			m.type = visualization_msgs::Marker::LINE_LIST;
+			m.color.r = 0;
+			m.color.b = 0;
+			m.color.g = 1;
+			m.color.a = 1;
+			m.scale.x = 1.0;
+			m.scale.y = 1.0;
+			m.scale.z = 1.0;
+			m.lifetime = ros::Duration(0);
+			m.header.frame_id = "map";
+			m.header.stamp = ros::Time::now();
+			m.ns = "frontiers";
+
+			for (auto p : parents) {
+				geometry_msgs::Point to, from;
+				costmap_->mapToWorld(p.first % size_x_, p.first / size_x_, to.x, to.y);
+				costmap_->mapToWorld(p.second % size_x_, p.second / size_x_, from.x, from.y);
+				m.points.emplace_back(from);
+				m.points.emplace_back(to);
+			}
+			debug_publisher.publish(m);
 		}
 
 		// set costs of frontiers
@@ -104,6 +160,7 @@ namespace frontier_exploration
 
 		return frontier_list;
 	}
+
 
 	node FrontierSearch::getRandomPoint() {
 		node idx;
@@ -229,6 +286,46 @@ namespace frontier_exploration
 		}
 
 		return NODE_NONE;  // Path is through known area
+	}
+
+	FrontierSearch::path_status FrontierSearch::getStatus(node from, node to, node& frontier) {
+		int x1, x2, y1, y2;
+		x1 = from % size_x_;
+		x2 = to % size_y_;
+		y1 = from / size_x_;
+		y2 = to / size_x_;
+
+		int dx = std::abs(x2 - x1);
+		int dy = std::abs(y2 - y1);
+		int sx = (x1 < x2) ? 1 : -1;
+		int sy = (y1 < y2) ? 1 : -1;
+
+		int error = dx - dy;
+		int currentX = x1;
+		int currentY = y1;
+
+		while (currentX != x2 || currentY != y2) {
+			if (map_[currentX + currentY * size_x_] == LETHAL_OBSTACLE) {
+				return BLOCKED;
+			} else if(map_[currentX + currentY * size_x_] == NO_INFORMATION) {
+				frontier = currentX + currentY * size_x_;
+				return FRONTIER;
+			}
+
+			int error2 = error * 2;
+
+			if (error2 > -dy) {
+				error -= dy;
+				currentX += sx;
+			}
+
+			if (error2 < dx) {
+				error += dx;
+				currentY += sy;
+			}
+		}
+
+		return CLEAR;
 	}
 
 

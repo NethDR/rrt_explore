@@ -4,6 +4,8 @@
 #include <costmap_2d/cost_values.h>
 #include <costmap_2d/costmap_2d.h>
 #include <unordered_map>
+#include <ros/ros.h>
+#include <ros/publisher.h>
 
 
 namespace frontier_exploration
@@ -41,7 +43,7 @@ namespace frontier_exploration
 		 */
 		FrontierSearch(costmap_2d::Costmap2D* costmap, double potential_scale,
 			double gain_scale, double min_frontier_size,
-			bool early_stop_enable, float steer_distance, int rrtMaxIter);
+			bool early_stop_enable, float steer_distance, int rrt_max_iter, ros::Publisher debug_publisher);
 
 		/**
 		 * @brief Runs search implementation, outward from the start position
@@ -94,6 +96,7 @@ namespace frontier_exploration
 		bool early_stop_enable;
 		float steer_distance;
 		int rrt_max_iter;
+		ros::Publisher debug_publisher;
 
 
 		node getRandomPoint();
