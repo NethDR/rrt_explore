@@ -219,7 +219,15 @@ void Explore::makePlan()
     stop();
     return;
   }
-  geometry_msgs::Point target_position = frontier->centroid;
+
+
+
+  geometry_msgs::Point target_position;
+  {
+    unsigned int x, y;
+    costmap_client_.getCostmap()->indexToCells(frontier->target, x, y);
+    costmap_client_.getCostmap()->mapToWorld(x, y, target_position.x, target_position.y);
+  }
 
   // time out if we are not making any progress
   bool same_goal = prev_goal_ == target_position;
