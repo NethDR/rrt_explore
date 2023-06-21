@@ -6,10 +6,12 @@
 #include <unordered_map>
 #include <ros/ros.h>
 #include <ros/publisher.h>
+#include <visualization_msgs/Marker.h>
 
 
 namespace frontier_exploration
 {
+	typedef unsigned int node;
 	/**
 	 * @brief Represents a frontier
 	 *
@@ -22,9 +24,9 @@ namespace frontier_exploration
 		geometry_msgs::Point centroid;
 		geometry_msgs::Point middle;
 		std::vector<geometry_msgs::Point> points;
+		node target;
 	};
 
-	typedef unsigned int node;
 
 	/**
 	 * @brief Thread-safe implementation of a frontier-search task for an input
@@ -96,6 +98,7 @@ namespace frontier_exploration
 		bool early_stop_enable;
 		float steer_distance;
 		int rrt_max_iter;
+		double k_rrt = 50;
 		ros::Publisher debug_publisher;
 
 
@@ -115,7 +118,15 @@ namespace frontier_exploration
 		node containsFrontier(node from, node to);
 		inline void addToTree(node n, node parent, std::unordered_map<node,node>& parents) {parents[n] = parent;}
 		inline bool isUnexplored(node n) { return map_[n] == costmap_2d::NO_INFORMATION;}
+		void publishTree(const std::unordered_map<node, node> &parents);
+		double distance(node a, node b);
+		node chooseParent(node x_new, node x_near, std::vector<node> nearest, std::unordered_map<node, double> costs, node &frontier, bool &is_front);
+		std::vector<node> near(node a, std::unordered_map<node, node> parents);
+		void rewire(node x, std::vector<node> nearby_nodes, std::unordered_map<node, node>& parents, std::unordered_map<node, double>& costs);
 
+		visualization_msgs::Marker generated_points;
+		visualization_msgs::Marker attempted_points;
+		visualization_msgs::Marker tree_marker;
 
 		static const node NODE_NONE = -1;
 

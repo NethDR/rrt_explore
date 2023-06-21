@@ -50,6 +50,8 @@ inline static bool operator==(const geometry_msgs::Point& one,
 
 namespace explore
 {
+  std::string ref_frame;
+
 Explore::Explore()
   : private_nh_("~")
   , tf_listener_(ros::Duration(10.0))
@@ -81,8 +83,8 @@ Explore::Explore()
         private_nh_.advertise<visualization_msgs::MarkerArray>("frontiers", 10);
     rrt_node_publisher =
         private_nh_.advertise<visualization_msgs::Marker>("rrtnodes", 10);
-    std::string s = costmap_client_.getGlobalFrameID();
-    ROS_DEBUG(s.c_str());
+    ref_frame = costmap_client_.getGlobalFrameID();
+    ROS_DEBUG("%s", ref_frame.c_str());
   }
 
   search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
@@ -188,6 +190,8 @@ void Explore::visualizeFrontiers(
 
 void Explore::makePlan()
 {
+  std_msgs::Duration d;
+  ros::Duration::
   // find frontiers
   auto pose = costmap_client_.getRobotPose();
   // get frontiers sorted according to cost

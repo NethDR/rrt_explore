@@ -4,13 +4,37 @@
 #include <costmap_tools.h>
 #include <limits>
 #include <fstream>
+#include <random>
 #include <visualization_msgs/Marker.h>
+#include <algorithm>
+#include <explore.h>
 
 namespace frontier_exploration
 {
 	using costmap_2d::LETHAL_OBSTACLE;
 	using costmap_2d::NO_INFORMATION;
 	using costmap_2d::FREE_SPACE;
+
+	void initMarker(visualization_msgs::Marker &m,int32_t type, float r, float g, float b, float a, double px, double py, double pz, double sx, double sy, double sz, std::string ns) {
+		m.type = type;
+		m.color.r = r;
+		m.color.b = g;
+		m.color.g = b;
+		m.color.a = a;
+		m.scale.x = sx;
+		m.scale.y = sy;
+		m.scale.z = sz;
+		m.action = visualization_msgs::Marker::ADD;
+		m.pose.position.x = px;
+		m.pose.position.y = py;
+		m.pose.position.z = pz;
+		m.pose.orientation.x = m.pose.orientation.y = m.pose.orientation.z = 0;
+		m.pose.orientation.w = 1;
+		m.lifetime = ros::Duration(0);
+		m.header.frame_id = explore::ref_frame;
+		m.header.stamp = ros::Time();
+		m.ns = ns;
+	}
 
 	FrontierSearch::FrontierSearch(costmap_2d::Costmap2D* costmap,
 		double potential_scale, double gain_scale,
@@ -26,6 +50,116 @@ namespace frontier_exploration
 		, rrt_max_iter(rrt_max_iter)
 		, debug_publisher(debug_publisher)
 	{
+		initMarker(generated_points,
+			visualization_msgs::Marker::CUBE_LIST,
+			1,1,0,1,
+			0,0,0,
+			0.001, 0.001, 0.001,
+			"generated");
+		initMarker(attempted_points,
+			visualization_msgs::Marker::CUBE_LIST,
+			1,1,0.5,1,
+			0,0,0,
+			0.01, 0.01, 0.01,
+			"attempted");
+		initMarker(tree_marker,
+			visualization_msgs::Marker::LINE_LIST,
+			0,0,1,1,
+			0,0,0,
+			0.01,0,0,
+			"rrt"
+		);
+	}
+
+	void FrontierSearch::publishTree(const std::unordered_map<node, node> &parents) {
+		tree_marker.points.clear();
+		for (auto p : parents) {
+			if (p.second == NODE_NONE)
+				continue;
+			unsigned int xto, xfrom, yto, yfrom;
+			geometry_msgs::Point to, from;
+			costmap_->indexToCells(p.first, xto, yto);
+			costmap_->indexToCells(p.second, xfrom, yfrom);
+			costmap_->mapToWorld(xto, yto, to.x, to.y);
+			costmap_->mapToWorld(xfrom, yfrom, from.x, from.y);
+			tree_marker.points.emplace_back(from);
+			tree_marker.points.emplace_back(to);
+		}
+		debug_publisher.publish(tree_marker);
+		debug_publisher.publish(generated_points);
+		debug_publisher.publish(attempted_points);
+	}
+
+	double FrontierSearch::distance(node a, node b) {
+		unsigned int ax, ay, bx, by;
+		costmap_->indexToCells(a, ax, ay);
+		costmap_->indexToCells(b, bx, by);
+		return sqrt(ax * ax + ay * ay);
+	}
+
+	node FrontierSearch::chooseParent(node x_new, node x_near,
+		std::vector<node> nearest,
+		std::unordered_map<node, double> costs, node &frontier, bool &is_front) {
+			auto cost_min = costs[x_near] + distance(x_new, x_near);
+			auto idx_min = x_near;
+
+			for (auto candidate: nearest) {
+				double cost = costs[candidate] + distance(x_new, candidate);
+				node front;
+				auto status = getStatus(candidate, x_new, front);
+
+				if (status != BLOCKED && cost < cost_min) {
+					cost_min = cost;
+					idx_min = candidate;
+					frontier = front;
+					is_front = status == FRONTIER;
+				}
+			}
+			return idx_min;
+	}
+
+	std::vector<node> FrontierSearch::near(node x, std::unordered_map<node, node> parents)
+	{
+		std::vector<node> v;
+
+		auto card_v = parents.size();
+
+		auto r = std::max(k_rrt * sqrt(std::log(card_v)/card_v), (double)steer_distance);
+
+		for (auto p : parents) {
+			auto a = p.first;
+			if (distance(a, x) < r) {
+				v.push_back(a);
+			}
+		}
+		return v;
+	}
+
+	void propagate(node x, double delta, std::unordered_map<node, node> &parents, std::unordered_map<node, double> &costs) {
+		for (auto p : parents) {
+			if (p.second != x)
+				continue;
+
+			costs[p.first] -= delta;
+			propagate(p.first, delta, parents, costs);
+		}
+	}
+
+	void FrontierSearch::rewire(node x, std::vector<node> nearby_nodes, std::unordered_map<node, node> &parents, std::unordered_map<node, double> &costs) {
+		double cx = costs[x];
+		for (node idx : nearby_nodes) {
+			node f;
+			auto status = getStatus(x, idx, f);
+			if (status != CLEAR)
+				continue;
+			double cost = cx + distance(x, idx);
+			if (cost < costs[idx]) {
+				double delta = costs[idx] - cost;
+				parents[idx] = x;
+				costs[idx] = cost;
+				propagate(idx, delta, parents, costs);
+			}
+		}
 	}
 
 	std::vector<Frontier> FrontierSearch::searchFrom(geometry_msgs::Point position)
@@ -52,27 +186,40 @@ namespace frontier_exploration
 		std::vector<bool> frontier_flag(size_x_ * size_y_, false);
 
 		// initialize breadth first search
-		std::queue<unsigned int> bfs;
 		std::unordered_map<node, node> parents;
+		std::unordered_map<node, double> costs;
 
 		// find closest clear cell to start search
 		unsigned int start, clear, pos = costmap_->getIndex(mx, my);
+
+
+
 		if (nearestCell(clear, pos, FREE_SPACE, *costmap_)) {
 			start = clear;
-			bfs.push(clear);
 		}
 		else {
 			start = pos;
-			bfs.push(pos);
 			ROS_WARN("Could not find nearby clear cell to start search");
 		}
+
 		parents[start] = NODE_NONE;
+		costs[start] = 0;
 
 		bool found_goal = false;
 
 		for (int iter = 0; iter < rrt_max_iter; iter++) {
+
+			ROS_DEBUG_COND(iter % 1000 == 0, "iter %d", iter);
+
+			if (iter % 1000 == 0) {
+				publishTree(parents);
+			}
+
+
 			auto rand_node = getRandomPoint();
 			auto nearest_node = getClosestNode(rand_node, parents);
+			if (nearest_node == NODE_NONE)
+				continue;
 			auto new_node = steer(rand_node, nearest_node);
 			node front;
 			auto status = getStatus(nearest_node, new_node, front);
@@ -80,12 +227,24 @@ namespace frontier_exploration
 			if (status == BLOCKED)
 				continue;
 
-			addToTree(new_node, nearest_node, parents);
+			bool is_front = status == FRONTIER;
 
-			if (status == FRONTIER && isNewFrontierCell(front, frontier_flag)) {
+			auto nearest_nodes = near(new_node, parents);
+
+			auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, front, is_front);
+
+			parents[new_node] = parent;
+			costs[new_node] = costs[parent] + distance(new_node, parent);
+
+			rewire(new_node, nearest_nodes, parents, costs);
+
+
+			if (is_front && isNewFrontierCell(front, frontier_flag)) {
 				frontier_flag[front] = true;
-				Frontier new_frontier = buildNewFrontier(front, pos, frontier_flag);
+				Frontier new_frontier = buildNewFrontier(front, new_node, frontier_flag);
 				if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
+					new_frontier.cost += costs[new_node];
+					new_frontier.target = new_node;
 					frontier_list.push_back(new_frontier);
 					found_goal = true;
 				}
@@ -93,62 +252,10 @@ namespace frontier_exploration
 
 			if (early_stop_enable && found_goal)
 				break;
-
-			ROS_DEBUG_COND(iter % (rrt_max_iter / 1000) == 0, "iter %d", iter);
-
-			if (iter % (rrt_max_iter / 100) == 0) {
-				visualization_msgs::Marker m;
-				m.type = visualization_msgs::Marker::LINE_LIST;
-				m.color.r = 0;
-				m.color.b = 0;
-				m.color.g = 1;
-				m.scale.x = 1.0;
-				m.scale.y = 1.0;
-				m.scale.z = 1.0;
-				m.lifetime = ros::Duration(0);
-				m.header.frame_id = "map";
-				m.header.stamp = ros::Time::now();
-				m.ns = "frontiers";
-
-				for (auto p : parents) {
-					unsigned int xto, xfrom, yto, yfrom;
-					geometry_msgs::Point to, from;
-					costmap_->indexToCells(p.first, xto, yto);
-					costmap_->indexToCells(p.second, xfrom, yfrom);
-					costmap_->mapToWorld(xto, yto, to.x, to.y);
-					costmap_->mapToWorld(xfrom, yfrom, from.x, from.y);
-					m.points.emplace_back(from);
-					m.points.emplace_back(to);
-				}
-				debug_publisher.publish(m);
-			}
-
 		}
-
-		{
-			visualization_msgs::Marker m;
-			m.type = visualization_msgs::Marker::LINE_LIST;
-			m.color.r = 0;
-			m.color.b = 0;
-			m.color.g = 1;
-			m.color.a = 1;
-			m.scale.x = 1.0;
-			m.scale.y = 1.0;
-			m.scale.z = 1.0;
-			m.lifetime = ros::Duration(0);
-			m.header.frame_id = "map";
-			m.header.stamp = ros::Time::now();
-			m.ns = "frontiers";
-
-			for (auto p : parents) {
-				geometry_msgs::Point to, from;
-				costmap_->mapToWorld(p.first % size_x_, p.first / size_x_, to.x, to.y);
-				costmap_->mapToWorld(p.second % size_x_, p.second / size_x_, from.x, from.y);
-				m.points.emplace_back(from);
-				m.points.emplace_back(to);
-			}
-			debug_publisher.publish(m);
-		}
+		publishTree(parents);
+		generated_points.points.clear();
+		attempted_points.points.clear();
 
 		// set costs of frontiers
 		for (auto& frontier : frontier_list) {
@@ -158,15 +265,36 @@ namespace frontier_exploration
 			frontier_list.begin(), frontier_list.end(),
 			[](const Frontier& f1, const Frontier& f2) { return f1.cost < f2.cost; });
 
+
 		return frontier_list;
 	}
 
 
 	node FrontierSearch::getRandomPoint() {
 		node idx;
-		do {
-			idx = rand() % (size_x_ * size_y_);
-		} while (map_[idx] != LETHAL_OBSTACLE);
+		unsigned int x, y;
+		// std::default_random_engine generator();
+		std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+		std::uniform_int_distribution<int> distributionX(0,size_x_);
+		std::uniform_int_distribution<int> distributionY(0,size_y_);
+		int n = 0;
+		// do {
+			x = distributionX(rng);
+			y = distributionY(rng);
+			idx = costmap_->getIndex(x, y);
+			n++;
+		// } while (map_[idx] == LETHAL_OBSTACLE);
+
+		double rx, ry;
+		geometry_msgs::Point np;
+
+		costmap_->mapToWorld(x,y,rx,ry);
+
+		// ROS_DEBUG("%u %u %u %d", x, y, idx, n);
+		np.x = rx;
+		np.y = ry;
+		generated_points.points.emplace_back(np);
+
 		return idx;
 	}
 
@@ -174,23 +302,27 @@ namespace frontier_exploration
 		node closest = NODE_NONE;
 		float min_dist_sq = std::numeric_limits<float>::infinity();
 
-		float src_x, src_y;
-
-		src_x = n % size_x_;
-		src_y = n / size_x_;
+		unsigned int src_x, src_y;
+		costmap_->indexToCells(n, src_x, src_y);
 
 		for (auto pair : parents) {
 
 			node a = pair.first;
-			float dx, dy;
-			dx = a % size_x_ - src_x;
-			dy = a / size_x_ - src_y;
+			if (a == n)
+				return NODE_NONE;
+			unsigned int candidate_x, candidate_y;
+			costmap_->indexToCells(a, candidate_x, candidate_y);
+
+			unsigned int dx, dy;
+			dx = candidate_x - src_x;
+			dy = candidate_y - src_y;
 
 			float dist_sq = dx * dx + dy * dy;
 
 			if (dist_sq < min_dist_sq) {
 				closest = a;
 				min_dist_sq = dist_sq;
+				ROS_DEBUG("%f", dist_sq);
 			}
 		}
 
@@ -198,128 +330,68 @@ namespace frontier_exploration
 	}
 
 	node FrontierSearch::steer(node rand, node closest) {
-		float dx = closest % size_x_ - rand % size_x_;
-		float dy = closest / size_x_ - rand / size_x_;
+		unsigned int rx, ry, cx, cy;
+		costmap_->indexToCells(rand, rx, ry);
+		costmap_->indexToCells(closest, cx, cy);
+
+		int dx = cx - rx;
+		int dy = cy - ry;
 
 		float d = sqrt(dx * dx + dy * dy);
 
-		float dxn = dx / d;
-		float dyn = dy / d;
+		unsigned int nx, ny;
 
-		unsigned nx = closest % size_x_ + dxn * steer_distance;
-		unsigned ny = closest / size_x_ + dyn * steer_distance;
+		if (d <= steer_distance) {
+			nx = rx;
+			ny = ry;
+		} else {
+			float dxn = dx / d;
+			float dyn = dy / d;
 
-		return ny * size_x_ + nx;
-	}
-
-	bool FrontierSearch::isClear(node from, node to) {
-		int x1, x2, y1, y2;
-		x1 = from % size_x_;
-		x2 = to % size_y_;
-		y1 = from / size_x_;
-		y2 = to / size_x_;
-
-		int dx = std::abs(x2 - x1);
-		int dy = std::abs(y2 - y1);
-		int sx = (x1 < x2) ? 1 : -1;
-		int sy = (y1 < y2) ? 1 : -1;
-
-		int error = dx - dy;
-		int currentX = x1;
-		int currentY = y1;
-
-		while (currentX != x2 || currentY != y2) {
-			// Check if the current cell is an obstacle
-			if (map_[currentX + currentY * size_x_] == LETHAL_OBSTACLE) {
-				return false;  // Path is blocked by an obstacle
-			}
-
-			int error2 = error * 2;
-
-			if (error2 > -dy) {
-				error -= dy;
-				currentX += sx;
-			}
-
-			if (error2 < dx) {
-				error += dx;
-				currentY += sy;
-			}
+			nx = cx + dxn * steer_distance;
+			ny = cy + dyn * steer_distance;
 		}
 
-		return true;  // Path is clear of obstacles
-	}
+		geometry_msgs::Point np;
 
-	node FrontierSearch::containsFrontier(node from, node to) {
-		int x1, x2, y1, y2;
-		x1 = from % size_x_;
-		x2 = to % size_y_;
-		y1 = from / size_x_;
-		y2 = to / size_x_;
+		costmap_->mapToWorld(nx, ny, np.x, np.y);
 
-		int dx = std::abs(x2 - x1);
-		int dy = std::abs(y2 - y1);
-		int sx = (x1 < x2) ? 1 : -1;
-		int sy = (y1 < y2) ? 1 : -1;
+		attempted_points.points.emplace_back(np);
 
-		int error = dx - dy;
-		int currentX = x1;
-		int currentY = y1;
+		return costmap_->getIndex(nx,ny);
 
-		while (currentX != x2 || currentY != y2) {
-			// Check if the current cell unknown
-			if (map_[currentX + currentY * size_x_] == NO_INFORMATION) {
-				return currentX + currentY * size_x_;  // Path contains frontier
-			}
-
-			int error2 = error * 2;
-
-			if (error2 > -dy) {
-				error -= dy;
-				currentX += sx;
-			}
-
-			if (error2 < dx) {
-				error += dx;
-				currentY += sy;
-			}
-		}
-
-		return NODE_NONE;  // Path is through known area
 	}
 
 	FrontierSearch::path_status FrontierSearch::getStatus(node from, node to, node& frontier) {
-		int x1, x2, y1, y2;
-		x1 = from % size_x_;
-		x2 = to % size_y_;
-		y1 = from / size_x_;
-		y2 = to / size_x_;
+		unsigned int x1, x2, y1, y2;
+		costmap_->indexToCells(from, x1, y1);
+		costmap_->indexToCells(to, x2, y2);
 
-		int dx = std::abs(x2 - x1);
-		int dy = std::abs(y2 - y1);
+		int dx = std::abs((int)x2 - (int)x1);
+		int dy = -std::abs((int)y2 - (int)y1);
 		int sx = (x1 < x2) ? 1 : -1;
 		int sy = (y1 < y2) ? 1 : -1;
 
-		int error = dx - dy;
+		int error = dx + dy;
 		int currentX = x1;
 		int currentY = y1;
 
 		while (currentX != x2 || currentY != y2) {
-			if (map_[currentX + currentY * size_x_] == LETHAL_OBSTACLE) {
+			if (map_[costmap_->getIndex(currentX, currentY)] == LETHAL_OBSTACLE) {
 				return BLOCKED;
-			} else if(map_[currentX + currentY * size_x_] == NO_INFORMATION) {
-				frontier = currentX + currentY * size_x_;
+			} else if(map_[costmap_->getIndex(currentX, currentY)] == NO_INFORMATION) {
+				frontier = costmap_->getIndex(currentX, currentY);
 				return FRONTIER;
 			}
 
 			int error2 = error * 2;
 
-			if (error2 > -dy) {
-				error -= dy;
+			if (error2 >= dy) {
+				error += dy;
 				currentX += sx;
 			}
 
-			if (error2 < dx) {
+			if (error2 <= dx) {
 				error += dx;
 				currentY += sy;
 			}
