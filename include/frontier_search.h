@@ -12,6 +12,8 @@
 namespace frontier_exploration
 {
 	typedef unsigned int node;
+	const node NODE_NONE = -1;
+
 	/**
 	 * @brief Represents a frontier
 	 *
@@ -127,8 +129,6 @@ namespace frontier_exploration
 		visualization_msgs::Marker generated_points;
 		visualization_msgs::Marker attempted_points;
 		visualization_msgs::Marker tree_marker;
-
-		static const node NODE_NONE = -1;
 
 	};
 }

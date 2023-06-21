@@ -162,6 +162,20 @@ namespace frontier_exploration
 		}
 	}
 
+	node get_middle_step(node n, std::unordered_map<node, node> parents) {
+		node tgt = n;
+
+		while (n != NODE_NONE) {
+			n = parents[n];
+			if (n != NODE_NONE) {
+				n = parents[n];
+				tgt = parents[tgt];
+			}
+		}
+
+		return tgt;
+	}
+
 	std::vector<Frontier> FrontierSearch::searchFrom(geometry_msgs::Point position)
 	{
 		std::vector<Frontier> frontier_list;
@@ -260,6 +274,7 @@ namespace frontier_exploration
 		// set costs of frontiers
 		for (auto& frontier : frontier_list) {
 			frontier.cost = frontierCost(frontier);
+			frontier.target = get_middle_step(frontier.target, parents);
 		}
 		std::sort(
 			frontier_list.begin(), frontier_list.end(),
