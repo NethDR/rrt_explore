@@ -190,8 +190,6 @@ void Explore::visualizeFrontiers(
 
 void Explore::makePlan()
 {
-  std_msgs::Duration d;
-  ros::Duration::
   // find frontiers
   auto pose = costmap_client_.getRobotPose();
   // get frontiers sorted according to cost
