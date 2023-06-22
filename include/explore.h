@@ -110,6 +110,8 @@ private:
   ros::Duration progress_timeout_;
   bool visualize_;
 
+  ros::Publisher perf_publisher;
+
 };
 }
 

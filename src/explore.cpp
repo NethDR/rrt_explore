@@ -38,6 +38,7 @@
 #include <explore.h>
 
 #include <thread>
+#include <std_msgs/Duration.h>
 
 inline static bool operator==(const geometry_msgs::Point& one,
                               const geometry_msgs::Point& two)
@@ -87,7 +88,7 @@ Explore::Explore()
     rrt_node_publisher =
         private_nh_.advertise<visualization_msgs::Marker>("rrtnodes", 10);
     ref_frame = costmap_client_.getGlobalFrameID();
-    ROS_DEBUG("%s", ref_frame.c_str());
+    perf_publisher = private_nh_.advertise<std_msgs::Duration>("explore_time", 10);
   }
 
   search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
@@ -193,6 +194,7 @@ void Explore::visualizeFrontiers(
 
 void Explore::makePlan()
 {
+  ros::Time start = ros::Time::now();
   // find frontiers
   auto pose = costmap_client_.getRobotPose();
   // get frontiers sorted according to cost
@@ -204,6 +206,10 @@ void Explore::makePlan()
 
   if (frontiers.empty()) {
     stop();
+    ros::Time end = ros::Time::now();
+    std_msgs::Duration msg;
+    msg.data = end-start;
+    perf_publisher.publish(msg);
     return;
   }
 
@@ -220,6 +226,10 @@ void Explore::makePlan()
                        });
   if (frontier == frontiers.end()) {
     stop();
+    ros::Time end = ros::Time::now();
+    std_msgs::Duration msg;
+    msg.data = end-start;
+    perf_publisher.publish(msg);
     return;
   }
 
@@ -245,11 +255,19 @@ void Explore::makePlan()
     frontier_blacklist_.push_back(target_position);
     ROS_DEBUG("Adding current goal to black list");
     makePlan();
+    ros::Time end = ros::Time::now();
+    std_msgs::Duration msg;
+    msg.data = end-start;
+    perf_publisher.publish(msg);
     return;
   }
 
   // we don't need to do anything if we still pursuing the same goal
   if (same_goal) {
+    ros::Time end = ros::Time::now();
+    std_msgs::Duration msg;
+    msg.data = end-start;
+    perf_publisher.publish(msg);
     return;
   }
 
@@ -265,6 +283,10 @@ void Explore::makePlan()
                 const move_base_msgs::MoveBaseResultConstPtr& result) {
         reachedGoal(status, result, target_position);
       });
+  ros::Time end = ros::Time::now();
+  std_msgs::Duration msg;
+  msg.data = end-start;
+  perf_publisher.publish(msg);
 }
 
 bool Explore::goalOnBlacklist(const geometry_msgs::Point& goal)
