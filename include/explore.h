@@ -53,6 +53,7 @@
 
 namespace explore
 {
+  extern std::string ref_frame;
 /**
  * @class Explore
  * @brief A class adhering to the robot_actions::Action interface that moves the
@@ -108,6 +109,7 @@ private:
   double potential_scale_, orientation_scale_, gain_scale_;
   ros::Duration progress_timeout_;
   bool visualize_;
+
 };
 }
 
