@@ -54,19 +54,19 @@ namespace frontier_exploration
 			visualization_msgs::Marker::CUBE_LIST,
 			1,1,0,1,
 			0,0,0,
-			0.001, 0.001, 0.001,
+			0.1, 0.1, 0.1,
 			"generated");
 		initMarker(attempted_points,
 			visualization_msgs::Marker::CUBE_LIST,
 			1,1,0.5,1,
 			0,0,0,
-			0.01, 0.01, 0.01,
+			0.1, 0.1, 0.1,
 			"attempted");
 		initMarker(tree_marker,
 			visualization_msgs::Marker::LINE_LIST,
 			0,0,1,1,
 			0,0,0,
-			0.01,0,0,
+			0.1,0,0,
 			"rrt"
 		);
 	}
