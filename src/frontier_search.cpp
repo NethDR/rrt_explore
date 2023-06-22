@@ -165,13 +165,13 @@ namespace frontier_exploration
 	node get_middle_step(node n, std::unordered_map<node, node> parents) {
 		node tgt = n;
 
-		while (n != NODE_NONE) {
-			n = parents[n];
-			if (n != NODE_NONE) {
-				n = parents[n];
-				tgt = parents[tgt];
-			}
-		}
+		// while (n != NODE_NONE) {
+		// 	n = parents[n];
+		// 	if (n != NODE_NONE) {
+		// 		n = parents[n];
+		// 		tgt = parents[tgt];
+		// 	}
+		// }
 
 		return tgt;
 	}
@@ -235,30 +235,32 @@ namespace frontier_exploration
 			if (nearest_node == NODE_NONE)
 				continue;
 			auto new_node = steer(rand_node, nearest_node);
-			node front;
-			auto status = getStatus(nearest_node, new_node, front);
+			node end;
+			auto status = getStatus(nearest_node, new_node, end);
 
-			if (status == BLOCKED)
+			if (status == BLOCKED || end == nearest_node)
 				continue;
 
 			bool is_front = status == FRONTIER;
 
-			auto nearest_nodes = near(new_node, parents);
+			// auto nearest_nodes = near(new_node, parents);
 
-			auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, front, is_front);
+			// auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, end, is_front);
 
-			parents[new_node] = parent;
-			costs[new_node] = costs[parent] + distance(new_node, parent);
+			node parent = nearest_node;
 
-			rewire(new_node, nearest_nodes, parents, costs);
+			parents[end] = parent;
+			costs[end] = costs[parent] + distance(end, parent);
+
+			// rewire(new_node, nearest_nodes, parents, costs);
 
 
-			if (is_front && isNewFrontierCell(front, frontier_flag)) {
-				frontier_flag[front] = true;
-				Frontier new_frontier = buildNewFrontier(front, new_node, frontier_flag);
+			if (is_front && isNewFrontierCell(end, frontier_flag)) {
+				frontier_flag[end] = true;
+				Frontier new_frontier = buildNewFrontier(end, pos, frontier_flag);
 				if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
-					new_frontier.cost += costs[new_node];
-					new_frontier.target = new_node;
+					// new_frontier.cost += costs[end];
+					new_frontier.target = end;
 					frontier_list.push_back(new_frontier);
 					found_goal = true;
 				}
@@ -325,6 +327,8 @@ namespace frontier_exploration
 			node a = pair.first;
 			if (a == n)
 				return NODE_NONE;
+			if (map_[a] == NO_INFORMATION || map_[a] == LETHAL_OBSTACLE)
+				continue;
 			unsigned int candidate_x, candidate_y;
 			costmap_->indexToCells(a, candidate_x, candidate_y);
 
@@ -337,7 +341,7 @@ namespace frontier_exploration
 			if (dist_sq < min_dist_sq) {
 				closest = a;
 				min_dist_sq = dist_sq;
-				ROS_DEBUG("%f", dist_sq);
+				// ROS_DEBUG("%f", dist_sq);
 			}
 		}
 
@@ -349,8 +353,8 @@ namespace frontier_exploration
 		costmap_->indexToCells(rand, rx, ry);
 		costmap_->indexToCells(closest, cx, cy);
 
-		int dx = cx - rx;
-		int dy = cy - ry;
+		int dx = - cx + rx;
+		int dy = - cy + ry;
 
 		float d = sqrt(dx * dx + dy * dy);
 
@@ -377,7 +381,7 @@ namespace frontier_exploration
 
 	}
 
-	FrontierSearch::path_status FrontierSearch::getStatus(node from, node to, node& frontier) {
+	FrontierSearch::path_status FrontierSearch::getStatus(node from, node to, node& end) {
 		unsigned int x1, x2, y1, y2;
 		costmap_->indexToCells(from, x1, y1);
 		costmap_->indexToCells(to, x2, y2);
@@ -395,7 +399,7 @@ namespace frontier_exploration
 			if (map_[costmap_->getIndex(currentX, currentY)] == LETHAL_OBSTACLE) {
 				return BLOCKED;
 			} else if(map_[costmap_->getIndex(currentX, currentY)] == NO_INFORMATION) {
-				frontier = costmap_->getIndex(currentX, currentY);
+				end = costmap_->getIndex(currentX, currentY);
 				return FRONTIER;
 			}
 
@@ -410,7 +414,9 @@ namespace frontier_exploration
 				error += dx;
 				currentY += sy;
 			}
+			end = costmap_->getIndex(currentX, currentY);
 		}
+		end = to;
 
 		return CLEAR;
 	}

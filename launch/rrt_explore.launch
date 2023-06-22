@@ -12,8 +12,8 @@
   <param name="transform_tolerance" value="0.5"/>
   <param name="min_frontier_size" value="0.75"/>
 
-  <param name="early_stop_enable" value="true"/>
+  <param name="early_stop_enable" value="false"/>
   <param name="steer_distance" value="20"/>
-  <param name="rrt_max_iter" value="5000"/>
+  <param name="rrt_max_iter" value="10000"/>
 </node>
 </launch>
