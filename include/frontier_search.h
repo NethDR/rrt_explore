@@ -20,7 +20,7 @@ namespace frontier_exploration
 	 */
 	struct Frontier {
 		std::uint32_t size;
-		double min_distance;
+		double distance;
 		double cost;
 		geometry_msgs::Point initial;
 		geometry_msgs::Point centroid;
@@ -47,7 +47,7 @@ namespace frontier_exploration
 		 */
 		FrontierSearch(costmap_2d::Costmap2D* costmap, double potential_scale,
 			double gain_scale, double min_frontier_size,
-			bool early_stop_enable, float steer_distance, int rrt_max_iter, ros::Publisher debug_publisher);
+			bool early_stop_enable, float steer_distance, int rrt_max_iter, ros::Publisher debug_publisher, bool use_rrt_star, bool hinting);
 
 		/**
 		 * @brief Runs search implementation, outward from the start position
@@ -129,6 +129,8 @@ namespace frontier_exploration
 		visualization_msgs::Marker generated_points;
 		visualization_msgs::Marker attempted_points;
 		visualization_msgs::Marker tree_marker;
+
+		bool use_rrt_star, hinting;
 
 	};
 }

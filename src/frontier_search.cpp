@@ -40,7 +40,7 @@ namespace frontier_exploration
 		double potential_scale, double gain_scale,
 		double min_frontier_size,
 		bool early_stop_enable, float steer_distance, int rrt_max_iter,
-		ros::Publisher debug_publisher)
+		ros::Publisher debug_publisher, bool use_rrt_star, bool hinting)
 		: costmap_(costmap)
 		, potential_scale_(potential_scale)
 		, gain_scale_(gain_scale)
@@ -217,7 +217,8 @@ namespace frontier_exploration
 		}
 
 		parents[start] = NODE_NONE;
-		costs[start] = 0;
+		if (use_rrt_star)
+			costs[start] = 0;
 
 		bool found_goal = false;
 
@@ -243,23 +244,25 @@ namespace frontier_exploration
 
 			bool is_front = status == FRONTIER;
 
-			auto nearest_nodes = near(new_node, parents);
+			node parent;
 
-			auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, end, is_front);
+			if (use_rrt_star) {
+				auto nearest_nodes = near(new_node, parents);
 
-			// node parent = nearest_node;
+				auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, end, is_front);
 
-			parents[end] = parent;
-			costs[end] = costs[parent] + distance(end, parent);
+				parents[end] = parent;
+				costs[end] = costs[parent] + distance(end, parent);
 
-			rewire(new_node, nearest_nodes, parents, costs);
-
+				rewire(new_node, nearest_nodes, parents, costs);
+			} else {
+				parents[end] = nearest_node;
+			}
 
 			if (is_front && isNewFrontierCell(end, frontier_flag)) {
 				frontier_flag[end] = true;
-				Frontier new_frontier = buildNewFrontier(end, end, frontier_flag);
+				Frontier new_frontier = buildNewFrontier(end, pos, frontier_flag);
 				if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
-					// new_frontier.cost = costs[end];
 					new_frontier.target = end;
 					frontier_list.push_back(new_frontier);
 					found_goal = true;
@@ -275,8 +278,11 @@ namespace frontier_exploration
 
 		// set costs of frontiers
 		for (auto& frontier : frontier_list) {
-			frontier.cost = costs[frontier.target];
-			frontier.target = get_middle_step(frontier.target, parents);
+			if (use_rrt_star)
+				frontier.distance = frontier.target;
+			frontier.cost = frontierCost(frontier);
+			if (hinting)
+				frontier.target = get_middle_step(frontier.target, parents);
 		}
 		std::sort(
 			frontier_list.begin(), frontier_list.end(),
@@ -432,7 +438,7 @@ namespace frontier_exploration
 		output.centroid.x = 0;
 		output.centroid.y = 0;
 		output.size = 1;
-		output.min_distance = std::numeric_limits<double>::infinity();
+		output.distance = std::numeric_limits<double>::infinity();
 
 		// record initial contact point for frontier
 		unsigned int ix, iy;
@@ -480,8 +486,8 @@ namespace frontier_exploration
 					// to robot
 					double distance = sqrt(pow((double(reference_x) - double(wx)), 2.0) +
 						pow((double(reference_y) - double(wy)), 2.0));
-					if (distance < output.min_distance) {
-						output.min_distance = distance;
+					if (distance < output.distance) {
+						output.distance = distance;
 						output.middle.x = wx;
 						output.middle.y = wy;
 					}
@@ -519,8 +525,10 @@ namespace frontier_exploration
 
 	double FrontierSearch::frontierCost(const Frontier& frontier)
 	{
-		return (potential_scale_ * frontier.min_distance *
+		return (potential_scale_ * frontier.distance *
 			costmap_->getResolution()) -
 			(gain_scale_ * frontier.size * costmap_->getResolution());
 	}
+
+	double FrontierSearch::frontierCost(const Frontier& frontier)
 }

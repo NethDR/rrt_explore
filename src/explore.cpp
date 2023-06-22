@@ -65,6 +65,7 @@ Explore::Explore()
   bool early_stop_enable;
   float steer_distance;
   int rrt_max_iter;
+  bool use_rrt_star, rrt_hinting;
   private_nh_.param("planner_frequency", planner_frequency_, 1.0);
   private_nh_.param("progress_timeout", timeout, 30.0);
   progress_timeout_ = ros::Duration(timeout);
@@ -76,6 +77,8 @@ Explore::Explore()
   private_nh_.param("early_stop_enable", early_stop_enable, true);
   private_nh_.param("steer_distance", steer_distance, 10.0f);
   private_nh_.param("rrt_max_iter", rrt_max_iter, 500000);
+  private_nh_.param("use_rrt_star", use_rrt_star, true);
+  private_nh_.param("rtt_hinting", rrt_hinting, false);
   ros::Publisher rrt_node_publisher;
 
   if (visualize_) {
@@ -89,7 +92,7 @@ Explore::Explore()
 
   search_ = frontier_exploration::FrontierSearch(costmap_client_.getCostmap(),
                                                  potential_scale_, gain_scale_,
-                                                 min_frontier_size, early_stop_enable, steer_distance, rrt_max_iter, rrt_node_publisher);
+                                                 min_frontier_size, early_stop_enable, steer_distance, rrt_max_iter, rrt_node_publisher, use_rrt_star, rrt_hinting);
   ROS_INFO("Waiting to connect to move_base server");
   move_base_client_.waitForServer();
   ROS_INFO("Connected to move_base server");
@@ -232,10 +235,10 @@ void Explore::makePlan()
   // time out if we are not making any progress
   bool same_goal = prev_goal_ == target_position;
   prev_goal_ = target_position;
-  if (!same_goal || prev_distance_ > frontier->min_distance) {
+  if (!same_goal || prev_distance_ > frontier->distance) {
     // we have different goal or we made some progress
     last_progress_ = ros::Time::now();
-    prev_distance_ = frontier->min_distance;
+    prev_distance_ = frontier->distance;
   }
   // black list if we've made no progress for a long time
   if (ros::Time::now() - last_progress_ > progress_timeout_) {

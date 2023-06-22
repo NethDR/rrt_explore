@@ -13,7 +13,11 @@
   <param name="min_frontier_size" value="0.75"/>
 
   <param name="early_stop_enable" value="false"/>
+  <param name="use_rrt_star" value="true"/>
+  <param name="hinting" value="false"/>
   <param name="steer_distance" value="20"/>
   <param name="rrt_max_iter" value="10000"/>
+
+
 </node>
 </launch>
