@@ -243,23 +243,23 @@ namespace frontier_exploration
 
 			bool is_front = status == FRONTIER;
 
-			// auto nearest_nodes = near(new_node, parents);
+			auto nearest_nodes = near(new_node, parents);
 
-			// auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, end, is_front);
+			auto parent = chooseParent(new_node, nearest_node, nearest_nodes, costs, end, is_front);
 
-			node parent = nearest_node;
+			// node parent = nearest_node;
 
 			parents[end] = parent;
 			costs[end] = costs[parent] + distance(end, parent);
 
-			// rewire(new_node, nearest_nodes, parents, costs);
+			rewire(new_node, nearest_nodes, parents, costs);
 
 
 			if (is_front && isNewFrontierCell(end, frontier_flag)) {
 				frontier_flag[end] = true;
-				Frontier new_frontier = buildNewFrontier(end, pos, frontier_flag);
+				Frontier new_frontier = buildNewFrontier(end, end, frontier_flag);
 				if (new_frontier.size * costmap_->getResolution() >= min_frontier_size_) {
-					// new_frontier.cost += costs[end];
+					// new_frontier.cost = costs[end];
 					new_frontier.target = end;
 					frontier_list.push_back(new_frontier);
 					found_goal = true;
@@ -275,8 +275,8 @@ namespace frontier_exploration
 
 		// set costs of frontiers
 		for (auto& frontier : frontier_list) {
-			frontier.cost = frontierCost(frontier);
-			frontier.target = get_middle_step(frontier.target, parents);
+			frontier.cost = costs[frontier.target];
+			// frontier.target = get_middle_step(frontier.target, parents);
 		}
 		std::sort(
 			frontier_list.begin(), frontier_list.end(),
