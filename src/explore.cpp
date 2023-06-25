@@ -234,7 +234,6 @@ void Explore::makePlan()
   }
 
 
-
   geometry_msgs::Point target_position;
   {
     unsigned int x, y;
@@ -244,23 +243,32 @@ void Explore::makePlan()
 
   // time out if we are not making any progress
   bool same_goal = prev_goal_ == target_position;
+  if (!same_goal) {
+    if (prev_distance_ < frontier->cost) {
+      unsigned int x,y;
+      costmap_client_.getCostmap()->worldToMap(prev_goal_.x, prev_goal_.y, x, y);
+      if (costmap_client_.getCostmap()->getCost(x,y) == costmap_2d::NO_INFORMATION) {
+        same_goal = true;
+        target_position = prev_goal_;
+      }
+    } else {
+      // we have different goal or we made some progress
+      last_progress_ = ros::Time::now();
+      prev_distance_ = frontier->cost;
+    }
+  }
   prev_goal_ = target_position;
-  if (!same_goal || prev_distance_ > frontier->distance) {
-    // we have different goal or we made some progress
-    last_progress_ = ros::Time::now();
-    prev_distance_ = frontier->distance;
-  }
   // black list if we've made no progress for a long time
-  if (ros::Time::now() - last_progress_ > progress_timeout_) {
-    frontier_blacklist_.push_back(target_position);
-    ROS_DEBUG("Adding current goal to black list");
-    makePlan();
-    ros::Time end = ros::Time::now();
-    std_msgs::Duration msg;
-    msg.data = end-start;
-    perf_publisher.publish(msg);
-    return;
-  }
+  // if (ros::Time::now() - last_progress_ > progress_timeout_) {
+  //   frontier_blacklist_.push_back(target_position);
+  //   ROS_DEBUG("Adding current goal to black list");
+  //   makePlan();
+  //   ros::Time end = ros::Time::now();
+  //   std_msgs::Duration msg;
+  //   msg.data = end-start;
+  //   perf_publisher.publish(msg);
+  //   return;
+  // }
 
   // we don't need to do anything if we still pursuing the same goal
   if (same_goal) {

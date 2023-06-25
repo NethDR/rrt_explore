@@ -530,5 +530,4 @@ namespace frontier_exploration
 			(gain_scale_ * frontier.size * costmap_->getResolution());
 	}
 
-	double FrontierSearch::frontierCost(const Frontier& frontier)
 }
