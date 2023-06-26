@@ -49,6 +49,8 @@ namespace frontier_exploration
 		, steer_distance(steer_distance)
 		, rrt_max_iter(rrt_max_iter)
 		, debug_publisher(debug_publisher)
+		, use_rrt_star(use_rrt_star)
+		, hinting(hinting)
 	{
 		initMarker(generated_points,
 			visualization_msgs::Marker::CUBE_LIST,

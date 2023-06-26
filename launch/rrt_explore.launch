@@ -1,7 +1,7 @@
 <launch>
 
-  <arg name="use_rrt_star" default="false" />
-  <arg name="hinting" default="true" />
+  <arg name="use_rrt_star" default="true" />
+  <arg name="hinting" default="false" />
   <node pkg="rrt_explore" type="rrt_explore" respawn="false" name="rrt_explore" output="screen">
     <param name="robot_base_frame" value="base_footprint" />
     <param name="costmap_topic" value="map" />
@@ -13,11 +13,11 @@
     <param name="orientation_scale" value="0.0" />
     <param name="gain_scale" value="3.0" />
     <param name="transform_tolerance" value="0.5" />
-    <param name="min_frontier_size" value="0.75" />
+    <param name="min_frontier_size" value="0.10" />
 
     <param name="early_stop_enable" value="false" />
     <param name="use_rrt_star" type="bool" value="$(arg use_rrt_star)" />
-    <param name="hinting" type="bool" value="$(arg hinting)" />
+    <param name="rrt_hinting" type="bool" value="$(arg hinting)" />
     <param name="steer_distance" value="10" />
     <param name="rrt_max_iter" value="200000" />
     <param name="use_sim_time" value="true" />
