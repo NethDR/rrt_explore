@@ -281,7 +281,7 @@ namespace frontier_exploration
 		// set costs of frontiers
 		for (auto& frontier : frontier_list) {
 			if (use_rrt_star)
-				frontier.distance = frontier.target;
+				frontier.distance = costs[frontier.target];
 			frontier.cost = frontierCost(frontier);
 			if (hinting)
 				frontier.target = get_middle_step(frontier.target, parents);
