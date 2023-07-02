@@ -20,6 +20,5 @@
     <param name="rrt_hinting" type="bool" value="$(arg hinting)" />
     <param name="steer_distance" value="10" />
     <param name="rrt_max_iter" value="10000" />
-    <!-- <param name="use_sim_time" value="true" /> -->
   </node>
 </launch>
