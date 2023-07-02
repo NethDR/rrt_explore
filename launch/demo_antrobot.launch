@@ -1,0 +1,9 @@
+<launch>
+
+	<include file="$(find rplidar_ros)/launch/rplidar.launch"/>
+	<include file="$(find antrobot_ros)/launch/antrobot.launch"/>
+	<include file="$(find antrobot_ros)/launch/hector_slam.launch"/>
+	<include file="$(find antrobot_ros)/launch/move_base.launch"/>
+	<include file="$(find rrt_explore)/launch/rrt_explore.launch"/>
+
+</launch>
